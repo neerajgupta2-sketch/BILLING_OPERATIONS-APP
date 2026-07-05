@@ -1,6 +1,6 @@
 const express = require('express');
 const multer = require('multer');
-const { parse } = require('csv-parse/sync');
+const { parse } = require('csv-parse');
 const fs = require('fs');
 const db = require('../db');
 const { meterType, checkDefective, monthsUnbilled, assignClerk } = require('../lib/classify');
@@ -29,17 +29,16 @@ function str(v) {
   return v === undefined || v === null ? '' : String(v).trim();
 }
 
-router.post('/upload', upload.array('files', 4), (req, res) => {
+router.post('/upload', upload.array('files', 4), async (req, res) => {
   const results = [];
   try {
     for (const file of req.files) {
       const meta = parseFilenameMeta(file.originalname);
       if (!meta) {
         results.push({ filename: file.originalname, status: 'SKIPPED', reason: 'Filename pattern not recognized' });
+        fs.unlinkSync(file.path);
         continue;
       }
-      const raw = fs.readFileSync(file.path, 'utf8');
-      const records = parse(raw, { columns: true, skip_empty_lines: true, relax_quotes: true, trim: true });
 
       // If this exact report (type+division+date) was already uploaded, replace it instead of duplicating
       const existingBatches = db.prepare(`
@@ -53,23 +52,22 @@ router.post('/upload', upload.array('files', 4), (req, res) => {
 
       const batchStmt = db.prepare(`
         INSERT INTO upload_batches (report_type, division, report_date, filename, row_count)
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, 0)
       `);
-      const batchInfo = batchStmt.run(meta.reportType, meta.division, meta.reportDate, file.originalname, records.length);
+      const batchInfo = batchStmt.run(meta.reportType, meta.division, meta.reportDate, file.originalname);
       const batchId = batchInfo.lastInsertRowid;
 
-      if (meta.reportType === 'BILLED') {
-        insertBilled(batchId, meta, records);
-      } else {
-        insertUnbilled(batchId, meta, records);
-      }
+      const rowCount = meta.reportType === 'BILLED'
+        ? await streamInsertBilled(batchId, meta, file.path)
+        : await streamInsertUnbilled(batchId, meta, file.path);
 
-      results.push({ filename: file.originalname, status: 'OK', reportType: meta.reportType, division: meta.division, reportDate: meta.reportDate, rows: records.length });
+      db.prepare('UPDATE upload_batches SET row_count = ? WHERE id = ?').run(rowCount, batchId);
+
+      results.push({ filename: file.originalname, status: 'OK', reportType: meta.reportType, division: meta.division, reportDate: meta.reportDate, rows: rowCount });
       fs.unlinkSync(file.path);
     }
 
     // After all files in this upload are in, re-check resolution status for defective bills
-    // (a bill is "resolved" once a later-dated batch shows BILL_BASIS = BR for the same ACCT_ID)
     detectResolutions();
 
     res.json({ ok: true, results });
@@ -79,80 +77,91 @@ router.post('/upload', upload.array('files', 4), (req, res) => {
   }
 });
 
-function insertBilled(batchId, meta, records) {
-  db.exec('BEGIN');
-  try {
-    insertBilledInner(batchId, meta, records);
-    db.exec('COMMIT');
-  } catch (e) {
-    db.exec('ROLLBACK');
-    throw e;
-  }
+// Streams the CSV file row-by-row (instead of loading the whole file into memory at once)
+// and inserts each row immediately inside a single transaction. This keeps memory usage
+// roughly constant no matter how large the file is -- important on memory-limited free hosting.
+function streamInsertBilled(batchId, meta, filePath) {
+  return new Promise((resolve, reject) => {
+    const stmt = db.prepare(`
+      INSERT INTO billed_records (
+        batch_id, report_date, division, acct_id, scno, name, tariff_type, sanction_load,
+        substation, meter_serial, meter_type, meter_read_remark, bill_basis, bill_inf_flg,
+        agent_id, billed_units, amount_payable, bill_date, is_defective, defect_reasons, assigned_clerk
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    `);
+
+    let count = 0;
+    db.exec('BEGIN');
+
+    const parser = fs.createReadStream(filePath).pipe(parse({
+      columns: true, skip_empty_lines: true, relax_quotes: true, trim: true,
+    }));
+
+    parser.on('readable', () => {
+      let r;
+      while ((r = parser.read()) !== null) {
+        const meterSerial = str(r.METER_SERIAL_NBR);
+        const mt = meterType(meterSerial);
+        const rowForRules = {
+          meter_read_remark: r.METER_READ_REMARK,
+          bill_basis: r.BILL_BASIS,
+          bill_inf_flg: r.BILL_INF_FLG,
+          tariff_type: r.TARIFF_TYPE,
+          sanction_load: num(r.SANCTION_LOAD),
+          substation: r.SUBSTATION,
+        };
+        const { isDefective, reasons } = checkDefective(rowForRules);
+        const clerk = isDefective ? assignClerk(rowForRules) : null;
+
+        stmt.run(
+          batchId, meta.reportDate, meta.division,
+          str(r.ACCT_ID), str(r.SCNO), str(r.NAME), str(r.TARIFF_TYPE), num(r.SANCTION_LOAD),
+          str(r.SUBSTATION), meterSerial, mt, str(r.METER_READ_REMARK), str(r.BILL_BASIS), str(r.BILL_INF_FLG),
+          str(r.AGENT_ID), num(r.BILLED_UNITS), num(r.AMOUNT_PAYABLE), str(r.BILL_DATE),
+          isDefective ? 1 : 0, reasons.join(','), clerk
+        );
+        count++;
+      }
+    });
+    parser.on('error', (err) => { try { db.exec('ROLLBACK'); } catch (e) {} reject(err); });
+    parser.on('end', () => { db.exec('COMMIT'); resolve(count); });
+  });
 }
 
-function insertBilledInner(batchId, meta, records) {
-  const stmt = db.prepare(`
-    INSERT INTO billed_records (
-      batch_id, report_date, division, acct_id, scno, name, tariff_type, sanction_load,
-      substation, meter_serial, meter_type, meter_read_remark, bill_basis, bill_inf_flg,
-      agent_id, billed_units, amount_payable, bill_date, is_defective, defect_reasons, assigned_clerk
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-  `);
+function streamInsertUnbilled(batchId, meta, filePath) {
+  return new Promise((resolve, reject) => {
+    const stmt = db.prepare(`
+      INSERT INTO unbilled_records (
+        batch_id, report_date, division, acct_id, scno, name, mobile_no, tariff_type, sanction_load,
+        substation, meter_serial, meter_type, meter_status, last_bill_date, months_unbilled
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    `);
 
-  for (const r of records) {
-    const meterSerial = str(r.METER_SERIAL_NBR);
-    const mt = meterType(meterSerial);
-    const rowForRules = {
-      meter_read_remark: r.METER_READ_REMARK,
-      bill_basis: r.BILL_BASIS,
-      bill_inf_flg: r.BILL_INF_FLG,
-      tariff_type: r.TARIFF_TYPE,
-      sanction_load: num(r.SANCTION_LOAD),
-      substation: r.SUBSTATION,
-    };
-    const { isDefective, reasons } = checkDefective(rowForRules);
-    const clerk = isDefective ? assignClerk(rowForRules) : null;
+    let count = 0;
+    db.exec('BEGIN');
 
-    stmt.run(
-      batchId, meta.reportDate, meta.division,
-      str(r.ACCT_ID), str(r.SCNO), str(r.NAME), str(r.TARIFF_TYPE), num(r.SANCTION_LOAD),
-      str(r.SUBSTATION), meterSerial, mt, str(r.METER_READ_REMARK), str(r.BILL_BASIS), str(r.BILL_INF_FLG),
-      str(r.AGENT_ID), num(r.BILLED_UNITS), num(r.AMOUNT_PAYABLE), str(r.BILL_DATE),
-      isDefective ? 1 : 0, reasons.join(','), clerk
-    );
-  }
-}
+    const parser = fs.createReadStream(filePath).pipe(parse({
+      columns: true, skip_empty_lines: true, relax_quotes: true, trim: true,
+    }));
 
-function insertUnbilled(batchId, meta, records) {
-  db.exec('BEGIN');
-  try {
-    insertUnbilledInner(batchId, meta, records);
-    db.exec('COMMIT');
-  } catch (e) {
-    db.exec('ROLLBACK');
-    throw e;
-  }
-}
+    parser.on('readable', () => {
+      let r;
+      while ((r = parser.read()) !== null) {
+        const meterSerial = str(r.MTR_SRL_NO);
+        const mt = meterType(meterSerial);
+        const aging = monthsUnbilled(r.LAST_BILL_DATE, meta.reportDate);
 
-function insertUnbilledInner(batchId, meta, records) {
-  const stmt = db.prepare(`
-    INSERT INTO unbilled_records (
-      batch_id, report_date, division, acct_id, scno, name, mobile_no, tariff_type, sanction_load,
-      substation, meter_serial, meter_type, meter_status, last_bill_date, months_unbilled
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-  `);
-
-  for (const r of records) {
-    const meterSerial = str(r.MTR_SRL_NO);
-    const mt = meterType(meterSerial);
-    const aging = monthsUnbilled(r.LAST_BILL_DATE, meta.reportDate);
-
-    stmt.run(
-      batchId, meta.reportDate, meta.division, str(r.ACCT_ID), str(r.SCNO), str(r.NAME), str(r.MOBILE_NO),
-      str(r.TARIFF_TYPE), num(r.SANCTION_LOAD), str(r.SUBSTATION), meterSerial, mt,
-      str(r.METER_STATUS), str(r.LAST_BILL_DATE), aging
-    );
-  }
+        stmt.run(
+          batchId, meta.reportDate, meta.division, str(r.ACCT_ID), str(r.SCNO), str(r.NAME), str(r.MOBILE_NO),
+          str(r.TARIFF_TYPE), num(r.SANCTION_LOAD), str(r.SUBSTATION), meterSerial, mt,
+          str(r.METER_STATUS), str(r.LAST_BILL_DATE), aging
+        );
+        count++;
+      }
+    });
+    parser.on('error', (err) => { try { db.exec('ROLLBACK'); } catch (e) {} reject(err); });
+    parser.on('end', () => { db.exec('COMMIT'); resolve(count); });
+  });
 }
 
 // A defective bill is "resolved" once ANY later-dated billed batch for the same ACCT_ID has BILL_BASIS = BR
