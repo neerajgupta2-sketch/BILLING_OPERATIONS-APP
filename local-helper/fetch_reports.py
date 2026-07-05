@@ -24,8 +24,10 @@ tweaking if your FTP folder structure is different from what was described.
 """
 
 import ftplib
+import gzip
 import json
 import os
+import shutil
 import sys
 import tempfile
 from datetime import datetime
@@ -44,41 +46,55 @@ def load_config():
         return json.load(f)
 
 
-def build_filename(report_type, division, date_str):
-    # date_str format: DDMMYYYY, matches real filenames like BILLED_DVVNL_DIV233511_30062026.csv
-    return f"{report_type}_DVVNL_{division}_{date_str}.csv"
+def build_gz_filename(report_type, division, date_str):
+    # Real files on FTP look like: BILLED_DVVNL_DIV233511_05072026.csv.gz
+    return f"{report_type}_DVVNL_{division}_{date_str}.csv.gz"
 
 
 def fetch_from_ftp(cfg, date_str):
-    """Connects to FTP and downloads today's 4 files into a temp folder. Returns list of local paths."""
+    """
+    Real FTP layout (confirmed by browsing manually):
+        03_CSV_BILLED/<DDMMYYYY>/BILLED_DVVNL_DIV<code>_<DDMMYYYY>.csv.gz
+        04_CSV_UNBILLED/<DDMMYYYY>/UNBILLED_DVVNL_DIV<code>_<DDMMYYYY>.csv.gz
+    Each dated folder contains files for ALL divisions (not just yours) --
+    we only download the ones matching cfg['divisions'].
+    Files are gzip-compressed, so we decompress them locally before uploading.
+    """
     host = cfg['ftp']['host']
     user = cfg['ftp']['username']
     password = cfg['ftp']['password']
-    paths = cfg['ftp']['folder_paths']  # e.g. {"BILLED": "/billed", "UNBILLED": "/unbilled"}
+    base_folders = cfg['ftp']['folder_paths']  # e.g. {"BILLED": "03_CSV_BILLED", "UNBILLED": "04_CSV_UNBILLED"}
     divisions = cfg['divisions']  # e.g. ["DIV233511", "DIV233512"]
 
     tmpdir = tempfile.mkdtemp(prefix='billing_reports_')
-    downloaded = []
+    downloaded = []  # decompressed .csv paths, ready to upload
 
     print(f"Connecting to FTP: {host} ...")
-    ftp = ftplib.FTP(host, timeout=30)
+    ftp = ftplib.FTP(host, timeout=60)
     ftp.login(user, password)
     print("Connected.")
 
     for report_type in ['BILLED', 'UNBILLED']:
-        folder = paths.get(report_type, '')
+        base_folder = base_folders.get(report_type, '')
+        dated_folder = f"{base_folder}/{date_str}"
         for division in divisions:
-            filename = build_filename(report_type, division, date_str)
-            remote_path = f"{folder}/{filename}".replace('//', '/')
-            local_path = os.path.join(tmpdir, filename)
+            gz_filename = build_gz_filename(report_type, division, date_str)
+            remote_path = f"{dated_folder}/{gz_filename}"
+            local_gz_path = os.path.join(tmpdir, gz_filename)
+            local_csv_path = local_gz_path[:-3]  # strip ".gz"
             try:
                 print(f"  Downloading {remote_path} ...")
-                with open(local_path, 'wb') as f:
+                with open(local_gz_path, 'wb') as f:
                     ftp.retrbinary(f"RETR {remote_path}", f.write)
-                downloaded.append(local_path)
-                print(f"  OK: {filename}")
+                # Decompress
+                with gzip.open(local_gz_path, 'rb') as f_in, open(local_csv_path, 'wb') as f_out:
+                    shutil.copyfileobj(f_in, f_out)
+                downloaded.append(local_csv_path)
+                print(f"  OK: {gz_filename} (decompressed)")
             except ftplib.all_errors as e:
-                print(f"  NOT FOUND or ERROR for {filename}: {e}")
+                print(f"  NOT FOUND or ERROR for {gz_filename}: {e}")
+            except OSError as e:
+                print(f"  Downloaded but failed to decompress {gz_filename}: {e}")
 
     ftp.quit()
     return downloaded
@@ -113,3 +129,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+   
