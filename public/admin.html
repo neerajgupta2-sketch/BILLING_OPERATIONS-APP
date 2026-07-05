@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Billing Operations</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="app-shell">
+<div style="flex:1;">
+  <div class="topbar">
+    <div class="brand"><span class="bolt">⚡</span> Billing Operations <span class="sub">DIV233511 · DIV233512</span></div>
+    <div class="topbar-right">
+      <span class="role-pill">🧭 Admin</span>
+      <span class="switch-link" onclick="location.href='/'">Switch role</span>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="tabs">
+      <div class="tab active" data-tab="dashboard">Dashboard</div>
+      <div class="tab" data-tab="upload">Upload Reports</div>
+      <div class="tab" data-tab="unbilled">Unbilled Cases</div>
+      <div class="tab" data-tab="defective">Defective Bills</div>
+      <div class="tab" data-tab="config">Configuration</div>
+    </div>
+
+    <!-- ================= DASHBOARD ================= -->
+    <div class="panel active" data-panel="dashboard">
+      <div class="btn-row" style="margin-bottom:16px;">
+        <select id="divFilter" style="width:220px;"><option value="">All Divisions</option></select>
+        <button class="btn btn-sm" onclick="loadDashboard()">Refresh</button>
+      </div>
+
+      <div class="tile-grid" id="summaryTiles"></div>
+
+      <div class="section-title">Billed vs Unbilled Breakdown</div>
+      <div class="grid-2">
+        <div class="card">
+          <h3 style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">By Meter Type (Billed)</h3>
+          <div id="billedMeterType"></div>
+        </div>
+        <div class="card">
+          <h3 style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">By Meter Type (Unbilled)</h3>
+          <div id="unbilledMeterType"></div>
+        </div>
+      </div>
+      <div class="grid-2" style="margin-top:16px;">
+        <div class="card">
+          <h3 style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">By Category (Billed)</h3>
+          <div id="billedCategory"></div>
+        </div>
+        <div class="card">
+          <h3 style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">By Category (Unbilled)</h3>
+          <div id="unbilledCategory"></div>
+        </div>
+      </div>
+      <div class="grid-2" style="margin-top:16px;">
+        <div class="card">
+          <h3 style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">By Load Bracket (Billed)</h3>
+          <div id="billedLoad"></div>
+        </div>
+        <div class="card">
+          <h3 style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">By Load Bracket (Unbilled)</h3>
+          <div id="unbilledLoad"></div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px;">
+        <h3 style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">By Substation (Billed, top 15)</h3>
+        <div id="billedSubstation"></div>
+      </div>
+
+      <div class="section-title">Unbilled — Working Data</div>
+      <div class="grid-2">
+        <div class="card">
+          <h3 style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">Aging (months since last bill)</h3>
+          <div id="agingChart"></div>
+        </div>
+        <div class="card">
+          <h3 style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">ATR Progress</h3>
+          <div id="atrProgress"></div>
+        </div>
+      </div>
+
+      <div class="section-title">Defective Bills — Correction Progress</div>
+      <div class="card">
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Billing Clerk</th><th>Total Assigned</th><th>Resolved</th><th>Pending</th><th>Progress</th></tr></thead>
+            <tbody id="clerkProgressBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= UPLOAD ================= -->
+    <div class="panel" data-panel="upload">
+      <div class="card">
+        <h3 style="margin-bottom:6px;">Upload Today's Reports</h3>
+        <p style="color:var(--text-muted);font-size:13px;margin-bottom:16px;">
+          Drop the 4 daily files (Billed + Unbilled, for both divisions). If a file for a date already
+          exists, it will be replaced — not duplicated. Filenames must follow the pattern
+          <code>BILLED_DVVNL_DIV233511_DDMMYYYY.csv</code>.
+        </p>
+        <div class="upload-drop" id="dropZone">
+          <div style="font-size:28px;margin-bottom:8px;">📤</div>
+          Click to select files, or drag & drop here (up to 4 CSV files)
+          <input type="file" id="fileInput" multiple accept=".csv">
+        </div>
+        <div id="uploadStatus" style="margin-top:14px;"></div>
+      </div>
+      <div class="card">
+        <h3 style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">Upload History</h3>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Uploaded At</th><th>Type</th><th>Division</th><th>Report Date</th><th>Filename</th><th>Rows</th></tr></thead>
+            <tbody id="historyBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= UNBILLED CASES ================= -->
+    <div class="panel" data-panel="unbilled">
+      <div class="btn-row" style="margin-bottom:14px;">
+        <select id="unbilledDivFilter"><option value="">All Divisions</option></select>
+        <select id="unbilledStatusFilter">
+          <option value="">All Statuses</option>
+          <option value="PENDING">Pending</option>
+          <option value="ATR_SUBMITTED">ATR Submitted</option>
+        </select>
+        <button class="btn btn-sm" onclick="loadUnbilledTable()">Filter</button>
+        <span style="flex:1;"></span>
+        <a class="btn btn-sm" href="/api/export/unbilled.xlsx" target="_blank">⬇ Excel</a>
+        <a class="btn btn-sm" href="/api/export/unbilled.pdf" target="_blank">⬇ PDF</a>
+      </div>
+      <div class="card">
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Acct ID</th><th>Name</th><th>Division</th><th>Category</th><th>Load</th><th>Substation</th><th>Meter</th><th>Months Unbilled</th><th>Status</th></tr></thead>
+            <tbody id="unbilledBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= DEFECTIVE BILLS ================= -->
+    <div class="panel" data-panel="defective">
+      <div class="btn-row" style="margin-bottom:14px;">
+        <select id="defectiveDivFilter"><option value="">All Divisions</option></select>
+        <select id="defectiveClerkFilter"><option value="">All Clerks</option></select>
+        <select id="defectiveResolvedFilter">
+          <option value="">All</option>
+          <option value="false">Pending</option>
+          <option value="true">Resolved</option>
+        </select>
+        <button class="btn btn-sm" onclick="loadDefectiveTable()">Filter</button>
+        <span style="flex:1;"></span>
+        <a class="btn btn-sm" href="/api/export/defective.xlsx" target="_blank">⬇ Excel</a>
+        <a class="btn btn-sm" href="/api/export/defective.pdf" target="_blank">⬇ PDF</a>
+      </div>
+      <div class="card">
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Acct ID</th><th>Name</th><th>Division</th><th>Category</th><th>Load</th><th>Substation</th><th>Reasons</th><th>Assigned Clerk</th><th>Status</th></tr></thead>
+            <tbody id="defectiveBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= CONFIGURATION ================= -->
+    <div class="panel" data-panel="config">
+      <div class="grid-2">
+        <div class="card">
+          <h3 style="margin-bottom:12px;">Field Staff — Substation Mapping</h3>
+          <p style="color:var(--text-muted);font-size:12px;margin-bottom:12px;">Assign one or more substations (comma-separated) to each field staff member. This determines what they see on their mobile view.</p>
+          <div class="field-row">
+            <div class="field"><label>Name</label><input type="text" id="fsName" placeholder="e.g. Ramesh Kumar"></div>
+          </div>
+          <div class="field"><label>Substations (comma-separated, use exact names from the list below)</label><textarea id="fsSubstations" placeholder="e.g. SHIPRI, PULIYA NO. 9"></textarea></div>
+          <button class="btn btn-primary btn-sm" onclick="saveFieldStaff()">Save</button>
+          <div class="table-scroll" style="margin-top:14px;max-height:300px;">
+            <table>
+              <thead><tr><th>Name</th><th>Substations</th><th></th></tr></thead>
+              <tbody id="fieldStaffBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 style="margin-bottom:12px;">Known Substations (from uploaded data)</h3>
+          <p style="color:var(--text-muted);font-size:12px;margin-bottom:12px;">Use these exact names when mapping field staff, to avoid mismatches.</p>
+          <div id="knownSubstations" class="mono" style="font-size:12px;line-height:1.8;max-height:300px;overflow:auto;"></div>
+        </div>
+      </div>
+
+      <div class="grid-2" style="margin-top:16px;">
+        <div class="card">
+          <h3 style="margin-bottom:12px;">Billing Clerk Rules (read-only reference)</h3>
+          <p style="color:var(--text-muted);font-size:12px;margin-bottom:12px;">Evaluated top to bottom — first matching rule wins. Edit via the seed script if these ever need to change.</p>
+          <div class="table-scroll" style="max-height:300px;">
+            <table>
+              <thead><tr><th>Priority</th><th>Clerk</th><th>Category</th><th>Load Range</th><th>Substation Group</th></tr></thead>
+              <tbody id="clerkRulesBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <h3 style="margin-bottom:12px;">Substation Groups (read-only reference)</h3>
+          <div class="table-scroll" style="max-height:300px;">
+            <table>
+              <thead><tr><th>Substation</th><th>Group</th></tr></thead>
+              <tbody id="groupsBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<script src="/js/common.js"></script>
+<script src="/js/admin.js"></script>
+</body>
+</html>

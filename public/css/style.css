@@ -1,0 +1,217 @@
+/* ============================================================
+   Billing Operations App — shared design system
+   Palette: deep grid-navy + electric amber accent (utility theme)
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg: #0E1A2B;
+  --surface: #152540;
+  --surface-2: #1C3050;
+  --border: #2A3F5F;
+  --text: #EAF0F7;
+  --text-muted: #93A5BF;
+  --accent: #F5A623;       /* electric amber */
+  --accent-dim: #7A5716;
+  --danger: #E5484D;
+  --danger-dim: #4A2226;
+  --success: #35D68A;
+  --success-dim: #1D4A38;
+  --info: #4EA1F5;
+
+  --radius: 10px;
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 48px 48px;
+  background-attachment: fixed;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  min-height: 100vh;
+}
+/* Faint grid backdrop evokes a substation/meter grid without being loud */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background: radial-gradient(ellipse at top, rgba(14,26,43,0) 0%, var(--bg) 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+a { color: var(--accent); text-decoration: none; }
+code, .mono { font-family: var(--font-mono); }
+
+.app-shell { position: relative; z-index: 1; min-height: 100vh; display: flex; }
+
+/* ---------- Top bar ---------- */
+.topbar {
+  position: sticky; top: 0; z-index: 10;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 24px;
+  background: rgba(14,26,43,0.9);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+}
+.brand { display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-size: 18px; font-weight: 700; }
+.brand .bolt { color: var(--accent); font-size: 20px; }
+.brand .sub { color: var(--text-muted); font-size: 12px; font-weight: 400; font-family: var(--font-body); margin-left: 4px; }
+.topbar-right { display: flex; align-items: center; gap: 14px; font-size: 13px; color: var(--text-muted); }
+.role-pill {
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px;
+  padding: 5px 12px; font-size: 12px; color: var(--text);
+}
+.switch-link { font-size: 12px; color: var(--info); cursor: pointer; }
+
+/* ---------- Layout ---------- */
+.main { flex: 1; padding: 24px; max-width: 1400px; margin: 0 auto; width: 100%; }
+.container-narrow { max-width: 900px; margin: 0 auto; padding: 24px; position: relative; z-index: 1;}
+
+.tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.tab {
+  padding: 10px 16px; font-size: 13px; font-weight: 500; color: var(--text-muted);
+  cursor: pointer; border-bottom: 2px solid transparent; user-select: none;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.panel { display: none; }
+.panel.active { display: block; }
+
+/* ---------- Cards / tiles ---------- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+}
+.card + .card { margin-top: 16px; }
+
+.tile-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.tile.danger { border-left-color: var(--danger); }
+.tile.success { border-left-color: var(--success); }
+.tile.info { border-left-color: var(--info); }
+.tile .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 6px; }
+.tile .value { font-family: var(--font-mono); font-size: 26px; font-weight: 500; }
+
+.section-title { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin: 24px 0 10px; }
+.section-title:first-child { margin-top: 0; }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+@media (max-width: 900px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+
+/* ---------- Bars (simple breakdown viz, no chart lib needed) ---------- */
+.bar-row { display: flex; align-items: center; gap: 10px; font-size: 13px; padding: 5px 0; }
+.bar-label { width: 130px; flex-shrink: 0; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar-track { flex: 1; background: var(--surface-2); border-radius: 4px; height: 8px; overflow: hidden; }
+.bar-fill { height: 100%; background: var(--accent); border-radius: 4px; }
+.bar-count { width: 60px; text-align: right; font-family: var(--font-mono); font-size: 12px; color: var(--text); }
+
+/* ---------- Buttons ---------- */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
+  border-radius: 8px; padding: 9px 14px; font-size: 13px; font-weight: 500;
+  cursor: pointer; font-family: var(--font-body);
+}
+.btn:hover { border-color: var(--accent); }
+.btn-primary { background: var(--accent); color: #241703; border-color: var(--accent); }
+.btn-primary:hover { filter: brightness(1.08); }
+.btn-sm { padding: 6px 10px; font-size: 12px; }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ---------- Forms ---------- */
+label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+select, input[type=text], input[type=number], textarea {
+  width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: 8px; padding: 9px 10px; font-size: 13px; font-family: var(--font-body);
+}
+textarea { resize: vertical; min-height: 70px; }
+.field { margin-bottom: 14px; }
+.field-row { display: flex; gap: 12px; }
+.field-row > .field { flex: 1; }
+
+/* ---------- Tables ---------- */
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+th { color: var(--text-muted); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; position: sticky; top: 0; background: var(--surface); }
+tr:hover td { background: rgba(255,255,255,0.02); }
+.table-scroll { overflow-x: auto; max-height: 60vh; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+
+.badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 500; }
+.badge.pending { background: var(--accent-dim); color: var(--accent); }
+.badge.resolved { background: var(--success-dim); color: var(--success); }
+.badge.defective { background: var(--danger-dim); color: var(--danger); }
+.badge.smart { background: var(--surface-2); color: var(--info); }
+.badge.nonsmart { background: var(--surface-2); color: var(--text-muted); }
+
+/* ---------- Role select landing ---------- */
+.landing { min-height: 100vh; display: flex; align-items: center; justify-content: center; position: relative; z-index: 1; padding: 20px; }
+.landing-card { max-width: 480px; width: 100%; text-align: center; }
+.landing-logo { font-size: 40px; margin-bottom: 6px; }
+.landing h1 { font-size: 24px; margin-bottom: 6px; }
+.landing p { color: var(--text-muted); font-size: 14px; margin-bottom: 28px; }
+.role-options { display: flex; flex-direction: column; gap: 10px; }
+.role-btn {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 16px; text-align: left; cursor: pointer; color: var(--text); font-family: var(--font-body);
+  display: flex; align-items: center; gap: 14px;
+}
+.role-btn:hover { border-color: var(--accent); }
+.role-btn .icon { font-size: 22px; }
+.role-btn .title { font-family: var(--font-display); font-weight: 600; font-size: 15px; }
+.role-btn .desc { font-size: 12px; color: var(--text-muted); }
+
+/* ---------- Empty / loading states ---------- */
+.empty-state { text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 13px; }
+.loading-dot { color: var(--text-muted); font-size: 13px; padding: 20px; text-align: center; }
+
+/* ---------- Case card (field staff mobile) ---------- */
+.case-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px; margin-bottom: 10px; cursor: pointer;
+}
+.case-card:hover { border-color: var(--accent); }
+.case-card .top-row { display: flex; justify-content: space-between; align-items: start; margin-bottom: 6px; }
+.case-card .acct { font-family: var(--font-mono); font-size: 13px; }
+.case-card .name { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+.case-card .meta { font-size: 12px; color: var(--text-muted); }
+
+.upload-drop {
+  border: 2px dashed var(--border); border-radius: var(--radius); padding: 32px;
+  text-align: center; color: var(--text-muted); cursor: pointer; font-size: 13px;
+}
+.upload-drop:hover { border-color: var(--accent); color: var(--text); }
+.upload-drop input { display: none; }
+
+.toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 18px; font-size: 13px; z-index: 100; box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+}
+.toast.success { border-color: var(--success); color: var(--success); }
+.toast.error { border-color: var(--danger); color: var(--danger); }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }

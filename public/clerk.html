@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Billing Clerk — Billing Operations</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="app-shell">
+<div style="flex:1;">
+  <div class="topbar">
+    <div class="brand"><span class="bolt">⚡</span> Billing Operations <span class="sub">DIV233511 · DIV233512</span></div>
+    <div class="topbar-right">
+      <span class="role-pill">🧾 Billing Clerk</span>
+      <span class="switch-link" onclick="location.href='/'">Switch role</span>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="tabs">
+      <div class="tab active" data-tab="dashboard">Dashboard</div>
+      <div class="tab" data-tab="mybills">My Defective Bills</div>
+    </div>
+
+    <div class="panel active" data-panel="dashboard">
+      <div class="tile-grid" id="summaryTiles"></div>
+      <div class="section-title">Defective Bills — Correction Progress by Clerk</div>
+      <div class="card">
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Billing Clerk</th><th>Total Assigned</th><th>Resolved</th><th>Pending</th><th>Progress</th></tr></thead>
+            <tbody id="clerkProgressBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="grid-2" style="margin-top:16px;">
+        <div class="card">
+          <h3 style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">Defective by Category</h3>
+          <div id="defectiveCategory"></div>
+        </div>
+        <div class="card">
+          <h3 style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">Defective by Substation (top 15)</h3>
+          <div id="defectiveSubstation"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" data-panel="mybills">
+      <div class="card" style="margin-bottom:14px;">
+        <div class="field-row">
+          <div class="field">
+            <label>Which clerk are you?</label>
+            <select id="clerkSelect"></select>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="loadMyBills()">Show My Bills</button>
+      </div>
+      <div class="btn-row" style="margin-bottom:14px;" id="exportLinks" style="display:none;">
+        <a class="btn btn-sm" id="exportXlsx" target="_blank">⬇ Excel</a>
+        <a class="btn btn-sm" id="exportPdf" target="_blank">⬇ PDF</a>
+      </div>
+      <div class="card">
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Acct ID</th><th>Name</th><th>Division</th><th>Category</th><th>Load</th><th>Substation</th><th>Reasons</th><th>Status</th></tr></thead>
+            <tbody id="myBillsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script src="/js/common.js"></script>
+<script src="/js/clerk.js"></script>
+</body>
+</html>

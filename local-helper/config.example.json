@@ -1,0 +1,13 @@
+{
+  "ftp": {
+    "host": "ftp.uppclonline.com",
+    "username": "dvftpreport",
+    "password": "PUT_YOUR_FTP_PASSWORD_HERE",
+    "folder_paths": {
+      "BILLED": "/billed",
+      "UNBILLED": "/unbilled"
+    }
+  },
+  "divisions": ["DIV233511", "DIV233512"],
+  "app_upload_url": "https://YOUR-APP-URL-HERE.onrender.com/api/upload"
+}
